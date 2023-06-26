@@ -77,4 +77,4 @@ This application is provided as-is, without any warranty or guarantee. Use it at
 
 ## Author
 
-- [Your Name](https://github.com/your-username)
+- [SnYpe](https://github.com/snyype)
