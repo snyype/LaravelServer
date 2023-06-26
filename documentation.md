@@ -34,7 +34,7 @@ Laravel Server is a Python application that allows you to easily run a Laravel p
 3. Install the required dependencies:
 
    ```bash
-   pip install -r requirements.txt
+   pip install pyinstaller
    ```
 
 ## Usage
