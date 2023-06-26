@@ -1,7 +1,9 @@
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGroupBox, QLabel, QLineEdit, QPushButton, QRadioButton, QScrollArea, QWidget, QFileDialog, QMessageBox
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QDesktopServices
+from PyQt5.QtCore import QProcess
+import re
 import sys
-import subprocess
 import psutil
 
 class LaravelServer(QMainWindow):
@@ -56,7 +58,7 @@ class LaravelServer(QMainWindow):
         self.pushButton_3.setGeometry(390, 120, 131, 28)
         self.pushButton_3.setFont(self.font())
         self.pushButton_3.setStyleSheet("border: 1px solid black; background-color: #ff3333;")
-        self.pushButton_3.setText("Stop Server")
+        self.pushButton_3.setText("<font color='black'>Stop Server</font>")
         self.pushButton_3.clicked.connect(self.stop_server)
         self.pushButton_3.setEnabled(False)
 
@@ -95,35 +97,55 @@ class LaravelServer(QMainWindow):
     def start_server(self):
         folder_path = self.lineEdit.text()
         if folder_path:
-            if self.process and self.process.poll() is None:
+            if self.process and self.process.state() == QProcess.Running:
                 QMessageBox.warning(self, "Server Already Running", "The server is already running.")
                 return
 
-            cmd = "php artisan serve"
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=folder_path,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True
-            )
-            self.pushButton_2.setEnabled(False)
-            self.pushButton_3.setEnabled(True)
-            self.radioButton.setChecked(True)
-            self.radioButton_2.setChecked(False)
-            self.label_status.setText("<font color='green'>Server started.</font>")
+            cmd = "php"
+            args = ["artisan", "serve"]
+            self.process = QProcess(self)
+            self.process.setWorkingDirectory(folder_path)
+            self.process.start(cmd, args)
+
+            if self.process.state() == QProcess.Running:
+                self.pushButton_2.setEnabled(False)
+                self.pushButton_3.setEnabled(True)
+                self.radioButton.setChecked(True)
+                self.radioButton_2.setChecked(False)
+
+                self.process.readyReadStandardOutput.connect(self.read_output)
+                self.process.finished.connect(self.process_finished)
+            else:
+                QMessageBox.warning(self, "Server Start Error", "Failed to start the server.")
         else:
             self.label_status.setText("Please choose a folder first.")
 
+    def read_output(self):
+        output = self.process.readAllStandardOutput().data().decode()
+        ip_address = re.search(r'http://(\d+\.\d+\.\d+\.\d+):', output)
+        if ip_address:
+            ip_address = ip_address.group(1)
+            self.label_status.setText(f"<font color='green'>Server started.</font> Running at: <a href='http://{ip_address}:8000'>{ip_address}:8000</a>")
+            self.label_status.linkActivated.connect(lambda link: QDesktopServices.openUrl(QUrl(link)))
+        else:
+            self.label_status.setText("Server started.")
+
+    def process_finished(self):
+        self.process = None
+        self.pushButton_2.setEnabled(True)
+        self.pushButton_3.setEnabled(False)
+        self.radioButton.setChecked(False)
+        self.radioButton_2.setChecked(True)
+        self.label_status.setText("<font color='red'>Server stopped.</font>")
+
     def stop_server(self):
-        if self.process and self.process.poll() is None:
-            process_id = self.process.pid
+        if self.process and self.process.state() == QProcess.Running:
+            process_id = self.process.processId()
             process = psutil.Process(process_id)
             for child in process.children(recursive=True):
                 child.kill()
             process.kill()
-            self.process.wait()  # Wait for the process to terminate
+            self.process.waitForFinished()  # Wait for the process to terminate
             self.process = None
             self.pushButton_2.setEnabled(True)
             self.pushButton_3.setEnabled(False)
@@ -132,6 +154,7 @@ class LaravelServer(QMainWindow):
             self.label_status.setText("<font color='red'>Server stopped.</font>")
         else:
             QMessageBox.warning(self, "Server Not Running", "The server is not running.")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
